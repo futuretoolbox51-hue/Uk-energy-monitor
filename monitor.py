@@ -40,11 +40,12 @@ try:
 except Exception as e:
     print("❌ Error reading JSON file:", e, flush=True)
     sys.exit(1)
-
 # --- Step 2: Extract URLs ---
 urls = extract_urls(data)
-print(f"✅ Total URLs found: {len(urls)}", flush=True)
+total_urls = len(urls)
+print(f"✅ Total URLs found: {total_urls}", flush=True)
 
 # --- Step 3: Scan each URL for keywords ---
 keywords = ["restaurant", "takeaway"]
-found_count_
+
+

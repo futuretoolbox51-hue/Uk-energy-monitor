@@ -1,55 +1,54 @@
 import os
-print("📖 Reading bookmarks JSON file...", flush=True)
-print("📁 Current directory:", os.getcwd(), flush=True)
-print("📂 Files available:", os.listdir("."), flush=True)
-import json
 import requests
-import os
-import sys
+from bs4 import BeautifulSoup
+from telegram import Bot
 
-# --- Telegram credentials from GitHub Secrets ---
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# -------------------------
+# CONFIGURATION
+# -------------------------
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+KEYWORDS = ["restaurant", "takeaway"]
 
-# --- Helper: Send message to Telegram ---
-def send_message(text):
+# For testing/demo purpose, direct URLs list
+URLS = [
+    "https://www.just-eat.co.uk/area/ec1a-city_of_london?filter=grill&filter=new",
+    "https://www.just-eat.co.uk/area/sw11-clapham?filter=grill&filter=new",
+    "https://www.just-eat.co.uk/area/ec1-clerkenwell?filter=grill&filter=new"
+]
+
+# Initialize Telegram bot
+bot = Bot(token=TELEGRAM_TOKEN)
+
+# -------------------------
+# MAIN SCANNING LOGIC
+# -------------------------
+found_count = 0
+
+print("📖 Starting URL scan...", flush=True)
+print(f"📁 Current directory: {os.getcwd()}", flush=True)
+print(f"📂 URLs to scan: {len(URLS)}", flush=True)
+
+for url in URLS:
+    print(f"🔍 Fetching URL: {url}", flush=True)
     try:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        resp = requests.post(url, data={"chat_id": CHAT_ID, "text": text}, timeout=15)
-        if resp.status_code == 200 and resp.json().get("ok"):
-            print("✅ Message sent to Telegram", flush=True)
-        else:
-            print("❌ Telegram message failed:", resp.text, flush=True)
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        page_text = soup.get_text().lower()
+
+        for keyword in KEYWORDS:
+            if keyword.lower() in page_text:
+                found_count += 1
+                message = f"🍽️ Keyword '{keyword}' found at URL:\n{url}"
+                print(f"✅ {message}", flush=True)
+
+                # Send Telegram message
+                if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
+                    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+                break  # stop checking other keywords for this URL
+
     except Exception as e:
-        print("❌ Exception while sending Telegram message:", e, flush=True)
+        print(f"⚠️ Error fetching {url}: {e}", flush=True)
 
-# --- Helper: Extract all URLs recursively from bookmarks JSON ---
-def extract_urls(data):
-    urls = []
-    if isinstance(data, dict):
-        if "url" in data:
-            urls.append(data["url"])
-        for value in data.values():
-            urls.extend(extract_urls(value))
-    elif isinstance(data, list):
-        for item in data:
-            urls.extend(extract_urls(item))
-    return urls
-
-# --- Step 1: Read bookmarks file ---
-print("📖 Reading bookmarks JSON file...", flush=True)
-try:
-    with open("bookmarks-2025-09-17.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-except Exception as e:
-    print("❌ Error reading JSON file:", e, flush=True)
-    sys.exit(1)
-# --- Step 2: Extract URLs ---
-urls = extract_urls(data)
-total_urls = len(urls)
-print(f"✅ Total URLs found: {total_urls}", flush=True)
-
-# --- Step 3: Scan each URL for keywords ---
-keywords = ["restaurant", "takeaway"]
-
+print(f"✅ Scan complete! Total matches: {found_count}", flush=True)
 

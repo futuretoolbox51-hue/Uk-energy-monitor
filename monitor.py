@@ -1,3 +1,7 @@
+import os
+print("📖 Reading bookmarks JSON file...", flush=True)
+print("📁 Current directory:", os.getcwd(), flush=True)
+print("📂 Files available:", os.listdir("."), flush=True)
 import json
 import requests
 import os

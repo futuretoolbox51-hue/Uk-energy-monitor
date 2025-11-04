@@ -1,50 +1,54 @@
-import requests
-from bs4 import BeautifulSoup
-from telegram import Bot
 import os
+print("📖 Reading bookmarks JSON file...", flush=True)
+print("📁 Current directory:", os.getcwd(), flush=True)
+print("📂 Files available:", os.listdir("."), flush=True)
+import json
+import requests
+import os
+import sys
 
-# --- Telegram setup ---
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-bot = Bot(token=TELEGRAM_TOKEN)
+# --- Telegram credentials from GitHub Secrets ---
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# --- URLs to monitor ---
-urls = [
-    "https://www.just-eat.co.uk/area/se7-charton?filter=grill&filter=new",
-    "https://www.just-eat.co.uk/area/sw3-chelsea?filter=grill&filter=new",
-    "https://www.just-eat.co.uk/area/br7-chislehurst?filter=grill&filter=new",
-    "https://www.just-eat.co.uk/area/ec1a-city_of_london?filter=grill&filter=new",
-    "https://www.just-eat.co.uk/area/sw11-clapham?filter=grill&filter=new",
-    "https://www.just-eat.co.uk/area/ec1-clerkenwell?filter=grill&filter=new",
-    "https://www.just-eat.co.uk/area/e5-clapton?filter=grill&filter=new",
-    "https://www.just-eat.co.uk/area/sw4-clapham?filter=grill&filter=new",
-    "https://www.just-eat.co.uk/area/ec1p-clerkenwell?filter=grill&filter=new",
-    "https://www.just-eat.co.uk/area/ec1r-clerkenwell?filter=grill&filter=new"
-]
+# --- Helper: Send message to Telegram ---
+def send_message(text):
+    try:
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        resp = requests.post(url, data={"chat_id": CHAT_ID, "text": text}, timeout=15)
+        if resp.status_code == 200 and resp.json().get("ok"):
+            print("✅ Message sent to Telegram", flush=True)
+        else:
+            print("❌ Telegram message failed:", resp.text, flush=True)
+    except Exception as e:
+        print("❌ Exception while sending Telegram message:", e, flush=True)
 
-# --- Keywords to search for ---
+# --- Helper: Extract all URLs recursively from bookmarks JSON ---
+def extract_urls(data):
+    urls = []
+    if isinstance(data, dict):
+        if "url" in data:
+            urls.append(data["url"])
+        for value in data.values():
+            urls.extend(extract_urls(value))
+    elif isinstance(data, list):
+        for item in data:
+            urls.extend(extract_urls(item))
+    return urls
+
+# --- Step 1: Read bookmarks file ---
+print("📖 Reading bookmarks JSON file...", flush=True)
+try:
+    with open("bookmarks-2025-09-17.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print("❌ Error reading JSON file:", e, flush=True)
+    sys.exit(1)
+# --- Step 2: Extract URLs ---
+urls = extract_urls(data)
+total_urls = len(urls)
+print(f"✅ Total URLs found: {total_urls}", flush=True)
+
+# --- Step 3: Scan each URL for keywords ---
 keywords = ["restaurant", "takeaway"]
 
-found_count = 0
-
-print("📖 Starting URL scan...", flush=True)
-
-for url in urls:
-    try:
-        print(f"🔎 Checking URL: {url}", flush=True)
-        response = requests.get(url, timeout=15)
-        soup = BeautifulSoup(response.text, "html.parser")
-        page_text = soup.get_text().lower()
-
-        for keyword in keywords:
-            if keyword.lower() in page_text:
-                found_count += 1
-                message = f"✅ Keyword '{keyword}' found!\nURL: {url}"
-                bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-                print(f"✅ Sent Telegram alert for keyword '{keyword}'", flush=True)
-                break  # avoid sending multiple alerts for same URL
-
-    except Exception as e:
-        print(f"❌ Error checking {url}: {e}", flush=True)
-
-print(f"📊 Scan completed. Total URLs with keywords found: {found_count}", flush=True)
